@@ -90,6 +90,7 @@ def create_xlsx(src_filename):
                 col += 1
             row += 1
     dest_wb.save(dest_filename)
+    return (row_len, col_len)
 """-------------------------------------------------------------------"""
 
 """-------------------------------------------------------------------"""
@@ -97,13 +98,16 @@ def create_xlsx(src_filename):
 def read_config_json():
     return_dic = {}
     json_data = {
-        'appid':'modify appid',
-        'key':'modify key',
-        'fromLang':'en',
-        'toLang':'zh',
-        'select':'all',          #选择是否全部翻译，all-全部 select-只翻译没有翻译的内容
-        'thread': 'on' ,         #是否开启线程翻译，on-开，off-关
-        'thread_count': '500'    #线程一次处理的数据个数
+        'BAIDU_API':
+            [{
+                'appid':'modify appid',
+                'key':'modify key',
+                'fromLang':'en',
+                'toLang':'zh',
+                'select':'all',          #选择是否全部翻译，all-全部 select-只翻译没有翻译的内容
+                'thread': 'on' ,         #是否开启线程翻译，on-开，off-关
+                'thread_count': '500'    #线程一次处理的数据个数
+            }]
     }
 
     json_filename = 'config'  #json配置文件名，不带后缀文件名格式
@@ -122,7 +126,8 @@ def read_config_json():
     json_dic = json.loads(json_data)  #将json数据解析成字典数据类型
         
     #检查数据是否有效
-    if 7==len(json_dic.keys()) and ('appid' in json_dic.keys()):
+    dic = json_dic['BAIDU_API']
+    if 7==len(dic[0].keys()) and ('appid' in dic[0].keys()):
         return_dic = json_dic
         return return_dic   #返回json数据，以字典数据类型返回
     else:
@@ -132,23 +137,38 @@ def read_config_json():
 
 """-------------------------------------------------------------------"""
 ### 线程函数执行接口
-def thread_loop(api_class, count):
-    time.sleep(100)
-    print(api_class)
+### src=待翻译列 dest=翻译保存列  start_count-开始行数  end_count-结束行数 
+def baidu_thread_loop(src, dest, start_count, end_count):
+    while True:
+        time.sleep(0.01)
+        
 
 """-------------------------------------------------------------------"""
 
 
 ### 主程序代码
 def user_main():
+    #全局数据
+    wb_max_rows = 0  #最大行 
+    wb_max_col = 0   #最大列
+    
     config_data_dic = read_config_json() #读取配置数据
     print(config_data_dic)
-    
+    #获取百度翻译配置参数
+    baidu_list = config_data_dic['BAIDU_API']
+    baidu_dic = baidu_list[0]
+    baidu_count = int(baidu_dic['thread_count'])
+
     while True:
         filename = input("请输入表格的名称:  ")
         if not(os.path.isfile(filename+'.xlsx') and os.path.exists(filename+'.xlsx')):
             continue
         print("\t"+filename+'.xlsx'+"存在")
+        t_len = create_xlsx(filename)  #创建表格文件，并复制该表格
+        wb_max_rows = t_len[0]
+        wb_max_col = t_len[1]
+        if baidu_count<wb_max_rows:
+            baidu_count = wb_max_rows
         break
     while True:    
         enCell = input("待翻译列：(如：A列)  ")
@@ -168,7 +188,8 @@ def user_main():
 
     #多线程处理
     
-
+    #baidu_thread = threading.Thread(target=baidu_thread_loop, name="BAIDU_API", args=('baidu',12 ))
+    #baidu_thread.start()
     
 
 
