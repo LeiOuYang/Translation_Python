@@ -7,6 +7,7 @@ import hashlib
 import random
 import json
 import urllib
+import time,threading
 from urllib import request,parse
 from openpyxl import *
 
@@ -129,6 +130,14 @@ def read_config_json():
     return {}
 """-------------------------------------------------------------------"""
 
+"""-------------------------------------------------------------------"""
+### 线程函数执行接口
+def thread_loop(api_class, count):
+    time.sleep(100)
+    print(api_class)
+
+"""-------------------------------------------------------------------"""
+
 
 ### 主程序代码
 def user_main():
@@ -157,6 +166,7 @@ def user_main():
         break
     print("输入数据完成")
 
+    #多线程处理
     
 
     
