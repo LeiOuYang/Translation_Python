@@ -91,7 +91,50 @@ def create_xlsx(src_filename):
     dest_wb.save(dest_filename)
 """-------------------------------------------------------------------"""
 
+"""-------------------------------------------------------------------"""
+### 读取配置文件，配置文件不存在，则新建一个默认配置文件
+def read_config_json():
+    return_dic = {}
+    json_data = {
+        'appid':'modify appid',
+        'key':'modify key',
+        'fromLang':'en',
+        'toLang':'zh',
+        'select':'all',          #选择是否全部翻译，all-全部 select-只翻译没有翻译的内容
+        'thread': 'on' ,         #是否开启线程翻译，on-开，off-关
+        'thread_count': '500'    #线程一次处理的数据个数
+    }
+
+    json_filename = 'config'  #json配置文件名，不带后缀文件名格式
+    json_filename += '.json'
+
+    #判断文件是否存在，如果不存在，新建文件并且加入默认json数据
+    if not(os.path.isfile(json_filename) and os.path.exists(json_filename)):
+        print('file is no exists '+ json_filename)
+        file = open(json_filename,'w')
+        json.dump(json_data, file)  #将数据编码成json数据，并写入文件中
+        file.close()
+        print('file '+ json_filename +' created!')
+        
+    file = open(json_filename,'r')
+    json_data = file.read() #读取文件中的数据
+    json_dic = json.loads(json_data)  #将json数据解析成字典数据类型
+        
+    #检查数据是否有效
+    if 7==len(json_dic.keys()) and ('appid' in json_dic.keys()):
+        return_dic = json_dic
+        return return_dic   #返回json数据，以字典数据类型返回
+    else:
+        print('数据配置错误，请检查文件')
+    return {}
+"""-------------------------------------------------------------------"""
+
+
+### 主程序代码
 def user_main():
+    config_data_dic = read_config_json() #读取配置数据
+    print(config_data_dic)
+    
     while True:
         filename = input("请输入表格的名称:  ")
         if not(os.path.isfile(filename+'.xlsx') and os.path.exists(filename+'.xlsx')):
@@ -113,6 +156,8 @@ def user_main():
         print("\t"+"输入>>" + zhCell)
         break
     print("输入数据完成")
+
+    
 
     
 
