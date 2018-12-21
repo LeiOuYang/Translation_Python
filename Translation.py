@@ -12,10 +12,33 @@ from urllib import request,parse
 from openpyxl import *
 
 """-----------------------------------------------------------------"""
+### 功能说明
+def information():
+    print(
+    """
+            <<< 表格自动翻译工具 >>>
+
+    使用说明:
+
+        1、将需要翻译的表格文件防止脚本同级目录下，文件格式为 xlsx
+        2、windows用户可运行目录下的run.bat文件
+        3、输入文件名称，不需要输入文件格式
+        4、输入需要翻译的表格单元格列名，例如： A，B
+        5、输入翻译保存表格单元格
+        6、直到运行完成即可(提示' 翻译完成 '字段信息)
+
+    注意事项：
+        1、如果需要百度翻译平台，则需要修改config.json文件中的appid和key(目前软件只支持百度翻译)
+           appid和key的获取可通过注册百度开发者翻译平台开发者获取
+    """
+        )
+"""-----------------------------------------------------------------"""
+
+"""-----------------------------------------------------------------"""
 ### 百度翻译接口，如果翻译不成功，返回字符串 'THRANS_ERROR'
 ### 翻译成功，返回翻译字段
 def BaiDuTranslate(appid, secretKey, fromLang, toLang, src_trans):
-    print('Python test baidu fanyi api')
+    #print('Python test baidu fanyi api')
     
     s_url = 'http://api.fanyi.baidu.com/api/trans/vip/translate'  #提交地址
     salt = random.randint(32768, 65536)  #随机数
@@ -89,6 +112,7 @@ def create_xlsx(src_filename):
                 dest_ws.cell(row=row, column=col, value=cell.value)
                 col += 1
             row += 1
+    del dest_wb['Sheet']
     dest_wb.save(dest_filename)
     return (row_len, col_len)
 """-------------------------------------------------------------------"""
@@ -151,41 +175,95 @@ def user_main():
     #全局数据
     wb_max_rows = 0  #最大行 
     wb_max_col = 0   #最大列
-    
+    wb_src_filename = '' #待表格翻译文件名
+    enCell = None
+    zhCell = None
+
+    information()    #显示提示信息
+
+    print('>>读取配置文件中...')
+    time.sleep(1)
     config_data_dic = read_config_json() #读取配置数据
-    print(config_data_dic)
+    print(">>读取完成，配置参数表：" ,end='\n\t');print(config_data_dic)
+    
     #获取百度翻译配置参数
     baidu_list = config_data_dic['BAIDU_API']
     baidu_dic = baidu_list[0]
     baidu_count = int(baidu_dic['thread_count'])
+    baidu_fronLang = baidu_dic['fromLang']
+    baidu_toLang = baidu_dic['toLang']
+    baidu_appid = baidu_dic['appid']
+    baidu_key = baidu_dic['key']
+    baidu_start_pos = 1
 
     while True:
-        filename = input("请输入表格的名称:  ")
+        filename = input("\n\n请输入表格的名称:  ")
         if not(os.path.isfile(filename+'.xlsx') and os.path.exists(filename+'.xlsx')):
             continue
         print("\t"+filename+'.xlsx'+"存在")
+        wb_src_filename = filename+'.xlsx'
         t_len = create_xlsx(filename)  #创建表格文件，并复制该表格
         wb_max_rows = t_len[0]
         wb_max_col = t_len[1]
-        if baidu_count<wb_max_rows:
+        if baidu_count<=wb_max_rows:
             baidu_count = wb_max_rows
         break
     while True:    
-        enCell = input("待翻译列：(如：A列)  ")
-        if not enCell.isalpha():
+        fromCell = input("待翻译列：(如：A列)  ")
+        if not fromCell.isalpha():
             continue
-        print("\t"+"输入>>" + enCell)
+        fromCell = fromCell.strip().upper()
+        print("\t"+"输入>>" + fromCell)
         break
     while True:
-        zhCell = input("翻译保存列:  ")
-        if not zhCell.isalpha():
+        toCell = input("翻译保存列:  ")
+        toCell = toCell.strip().upper()
+        if not toCell.isalpha():
             continue
-        if zhCell==enCell:
+        if toCell==fromCell:
             continue
-        print("\t"+"输入>>" + zhCell)
+        print("\t"+"输入>>" + toCell)
         break
     print("输入数据完成")
 
+    wb_src_filename = filename+'_temp.xlsx'
+    wb_src = load_workbook(wb_src_filename)  #加载工作表
+    ws_sheet = wb_src[wb_src.sheetnames[0]]  #取工作表中第一张表
+    print('rows:'+str(wb_max_rows) + '  col: '+str(wb_max_col) + ' sheet: '+ws_sheet.title)
+
+    row = baidu_start_pos   #开始翻译行开始数
+    for row in range(baidu_start_pos,baidu_count+1):
+        error_count = 0
+        result = ''
+        fromCell_t = str(fromCell)+str(row)
+        toCell_t = str(toCell)+str(row)
+        cell = ws_sheet[fromCell_t]
+        srcs = cell.value
+        cell = ws_sheet[toCell_t]
+        dests = cell.value
+        if (srcs is None) or (''==srcs.strip()) or ((dests!=None) and (''!=dests.strip())): 
+            row += 1
+            #print('none')
+            continue
+        while True:
+            result = BaiDuTranslate(baidu_appid, baidu_key, baidu_fronLang, baidu_toLang, srcs)
+            print(result)
+            if 'THRANS_ERROR'==result:
+                error_count += 1
+                continue
+                if error_count>10:
+                    print(fromCell_t + ' translate error...')
+                    break
+            else:
+                break
+        dests = ''
+        dests += result
+        #print('fanyi ok')
+        row += 1
+    wb_src.save(wb_src_filename)
+    print("<<< 翻译工作完成 >>>")
+        
+        
     #多线程处理
     
     #baidu_thread = threading.Thread(target=baidu_thread_loop, name="BAIDU_API", args=('baidu',12 ))
