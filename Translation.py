@@ -3,8 +3,6 @@
 ### excel表格翻譯
 
 import os
-import hashlib
-import random
 import json
 import urllib
 import time,threading
@@ -27,9 +25,6 @@ def information():
         5、输入翻译保存表格单元格
         6、直到运行完成即可(提示' 翻译完成 '字段信息)
 
-    注意事项：
-        1、如果需要百度翻译平台，则需要修改config.json文件中的appid和key(目前软件只支持百度翻译)
-           appid和key的获取可通过注册百度开发者翻译平台开发者获取
     """
         )
 """-----------------------------------------------------------------"""
@@ -118,48 +113,6 @@ def create_xlsx(src_filename):
 """-------------------------------------------------------------------"""
 
 """-------------------------------------------------------------------"""
-### 读取配置文件，配置文件不存在，则新建一个默认配置文件
-def read_config_json():
-    return_dic = {}
-    json_data = {
-        'BAIDU_API':
-            [{
-                'appid':'modify appid',
-                'key':'modify key',
-                'fromLang':'en',
-                'toLang':'zh',
-                'select':'all',          #选择是否全部翻译，all-全部 select-只翻译没有翻译的内容
-                'thread': 'on' ,         #是否开启线程翻译，on-开，off-关
-                'thread_count': '500'    #线程一次处理的数据个数
-            }]
-    }
-
-    json_filename = 'config'  #json配置文件名，不带后缀文件名格式
-    json_filename += '.json'
-
-    #判断文件是否存在，如果不存在，新建文件并且加入默认json数据
-    if not(os.path.isfile(json_filename) and os.path.exists(json_filename)):
-        print('file is no exists '+ json_filename)
-        file = open(json_filename,'w')
-        json.dump(json_data, file)  #将数据编码成json数据，并写入文件中
-        file.close()
-        print('file '+ json_filename +' created!')
-        
-    file = open(json_filename,'r')
-    json_data = file.read() #读取文件中的数据
-    json_dic = json.loads(json_data)  #将json数据解析成字典数据类型
-        
-    #检查数据是否有效
-    dic = json_dic['BAIDU_API']
-    if 7==len(dic[0].keys()) and ('appid' in dic[0].keys()):
-        return_dic = json_dic
-        return return_dic   #返回json数据，以字典数据类型返回
-    else:
-        print('数据配置错误，请检查文件')
-    return {}
-"""-------------------------------------------------------------------"""
-
-"""-------------------------------------------------------------------"""
 ### 线程函数执行接口
 ### src=待翻译列 dest=翻译保存列  start_count-开始行数  end_count-结束行数 
 def baidu_thread_loop(src, dest, start_count, end_count):
@@ -172,6 +125,38 @@ def baidu_thread_loop(src, dest, start_count, end_count):
 
 ### 主程序代码
 def user_main():
+
+    ### 各平台翻译接口网址定义
+    #http://translate.google.cn/translate_a/single?client=gtx&dt=t&dj=1&ie=UTF-8&sl=auto&tl=zh_TW&q=calculate
+    google_trans_url = 'http://translate.google.cn/translate_a/single?client=gtx'
+    google_trans_data = 'good'
+    google_trans_data_struct = { 'dt':'t',  'dj':'1', 'ie':'UTF-8', 'sl':'en', 'tl':'zh_CN', 'q':google_trans_data}
+
+    #http://api.microsofttranslator.com/v2/Http.svc/Translate?appId=AFC76A66CF4F434ED080D245C30CF1E71C22959C&from=&to=en&text=考勤计算
+    bing_trans_url = 'http://api.microsofttranslator.com/v2/Http.svc/Translate?'
+
+    #http://fanyi.youdao.com/translate?&doctype=json&type=AUTO&i=计算
+    youdao_trans_url = 'http://fanyi.youdao.com/translate?'
+
+    #http://fanyi.baidu.com/transapi?from=auto&to=cht&query=Calculation
+    baidu_trans_url = 'http://fanyi.baidu.com/transapi?'
+
+    headers = {
+        #'Accept':'text/html,application/xhtml+xml,aplication/xml;q=0.9,*/*;q=0.8',
+        #'Accept-Language':'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
+        #'Connection':'keep-alive',
+        'Host':'translate.google.cn',
+        'Upgrade-Insecure-Requests':'1',
+        'User-Agent':'Mozilla/5.0 (Windows NT 10.0;WOW64;rv:64.0) Gecko/20100101 Firefox/64.0'
+    }
+    ### 结束各平台翻译网址定义
+    
+    data = parse.urlencode(google_trans_data_struct)
+    data = data.encode('utf8')
+    req = request.Request(url=google_trans_url, data=data, headers=headers, method="GET")
+    print(req.data)
+    request.urlopen(req)
+    
     #全局数据
     wb_max_rows = 0  #最大行 
     wb_max_col = 0   #最大列
@@ -181,20 +166,9 @@ def user_main():
 
     information()    #显示提示信息
 
-    print('>>读取配置文件中...')
-    time.sleep(1)
-    config_data_dic = read_config_json() #读取配置数据
-    print(">>读取完成，配置参数表：" ,end='\n\t');print(config_data_dic)
     
-    #获取百度翻译配置参数
-    baidu_list = config_data_dic['BAIDU_API']
-    baidu_dic = baidu_list[0]
-    baidu_count = int(baidu_dic['thread_count'])
-    baidu_fronLang = baidu_dic['fromLang']
-    baidu_toLang = baidu_dic['toLang']
-    baidu_appid = baidu_dic['appid']
-    baidu_key = baidu_dic['key']
-    baidu_start_pos = 1
+
+"""
 
     while True:
         filename = input("\n\n请输入表格的名称:  ")
@@ -262,6 +236,7 @@ def user_main():
         row += 1
     wb_src.save(wb_src_filename)
     print("<<< 翻译工作完成 >>>")
+    """
         
         
     #多线程处理
