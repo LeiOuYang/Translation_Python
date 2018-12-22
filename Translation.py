@@ -256,8 +256,8 @@ def user_main():
                     break
             else:
                 break
-        dests = ''
-        dests += result
+        cell.value = ''
+        cell.value += result
         #print('fanyi ok')
         row += 1
     wb_src.save(wb_src_filename)
