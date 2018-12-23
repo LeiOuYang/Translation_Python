@@ -1,4 +1,4 @@
-#!/usr/bin
+#!/usr/bin/env python
 
 ### excel表格翻譯
 
@@ -6,6 +6,7 @@ import os
 import json
 import urllib
 import time,threading
+import xml.etree.ElementTree as ET
 from urllib import request,parse
 from openpyxl import *
 
@@ -14,6 +15,7 @@ from openpyxl import *
 def information():
     print(
     """
+-----------------------------------------------------------------
             <<< 表格自动翻译工具 >>>
 
     使用说明:
@@ -25,6 +27,10 @@ def information():
         5、输入翻译保存表格单元格
         6、直到运行完成即可(提示' 翻译完成 '字段信息)
 
+    注意：目前只支持英文自动翻译成中文
+    
+    作者：Awesome       QQ：2281280195
+------------------------------------------------------------------
     """
         )
 """-----------------------------------------------------------------"""
@@ -113,8 +119,107 @@ def create_xlsx(src_filename):
 """-------------------------------------------------------------------"""
 
 """-------------------------------------------------------------------"""
+### 各平台翻译函数接口
+### 输入参数：输入两个元素的元组数据，分别为：翻译平台地址，需要翻译的数据(初始语言，目标语言，待翻译值)
+### 返回数据：返回一个字典数据{翻译平台：翻译结果}
+"""
+#谷歌翻译接口返回一个txt文件
+    #http://translate.google.cn/translate_a/single?client=gtx&dt=t&dj=1&ie=UTF-8&sl=auto&tl=zh_TW&q=calculate
+#微软翻译接口返回的是xml文档
+    #http://api.microsofttranslator.com/v2/Http.svc/Translate?appId=AFC76A66CF4F434ED080D245C30CF1E71C22959C&from=&to=en&text=考勤计算
+#有道翻译接口返回json格式数据
+    #http://fanyi.youdao.com/translate?&doctype=json&type=AUTO&i=计算
+#百度翻译接口返回json格式数据
+    #http://fanyi.baidu.com/transapi?from=auto&to=cht&query=Calculation
+"""
+def translate_data(tdata=('BAIDU', ('en', 'zh', ''))):
+
+    if tdata==() or len(tdata)!=2:
+        return {}
+
+    api_class = tdata[0].strip().upper()
+    api_url = ''
+    api_data = {}
+    dest_data = ''
+    if 'BAIDU'==api_class:
+        api_url = 'http://fanyi.baidu.com/transapi?'
+        value = list(tdata[1])
+        api_data = { 'from':'auto', 'to':value[1], 'query':value[2] }
+    elif 'YOUDAO'==api_class:
+        api_url = 'http://fanyi.youdao.com/translate?'
+        value = list(tdata[1])
+        api_data = { 'doctype':'json', 'type':'auto', 'i':value[2] }
+    elif 'BING'==api_class:
+        api_url = 'http://api.microsofttranslator.com/v2/Http.svc/Translate?appId=AFC76A66CF4F434ED080D245C30CF1E71C22959C'
+        value = list(tdata[1])
+        api_data = { 'from':'', 'to':value[1], 'text':value[2] }
+    elif 'GOOGLE'==api_class:
+        api_url = 'http://translate.google.cn/translate_a/single?client=gtx'
+        value = list(tdata[1])
+        api_data = { 'dt':'t',  'dj':'1', 'ie':'UTF-8', 'sl':value[0], 'tl':value[1], 'q':value[2] }
+    else:
+        return {}
+    
+    #定义http头部
+    headers = {
+        'Accept' : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        #'Accept-Encoding':'gzip, deflate',
+        'Accept-Language': 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
+        'Connection':'keep-alive',
+        #'Host' : 'fanyi.baidu.com',
+        'Upgrade-Insecure-Requests':'1',
+        'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:64.0) Gecko/20100101 Firefox/64.0'
+    }
+
+    #获取http翻译应答数据
+    data = parse.urlencode(api_data)
+    data = data.encode('utf8')
+    data_str = '&'+data.decode('utf8')
+    req = request.Request(url=api_url+data_str, headers=headers, method="GET")
+    res_data = request.urlopen(req)
+    if res_data.status==200:
+        res_data = res_data.read().decode('utf8')
+    else:
+        return {}
+
+    #解析获取翻译字符串
+    if 'BAIDU'==api_class:  #json处理
+        json_d = json.loads(res_data)
+        if 'data' in json_d.keys():
+            data = json_d['data']
+            data_dic = data[0]
+            dest_data = data_dic['dst']
+        else:
+            return {}
+    elif 'YOUDAO'==api_class: #json处理
+        json_d = json.loads(res_data)
+        if 'translateResult' in json_d.keys():
+            data = json_d['translateResult']
+            data= data[0]
+            data_dic = data[0]
+            dest_data = data_dic['tgt']
+        else:
+            return {}
+    elif 'GOOGLE'==api_class:
+        json_d = json.loads(res_data)
+        if 'sentences' in json_d.keys():
+            data = json_d['sentences']
+            data_dic = data[0]
+            dest_data = data_dic['trans']
+        else:
+            return {}
+    elif 'BING'==api_class:
+        root = ET.fromstring(res_data)
+        dest_data = root.text
+        
+    return {api_class:dest_data}
+        
+
+"""-------------------------------------------------------------------"""
+
+"""-------------------------------------------------------------------"""
 ### 线程函数执行接口
-### src=待翻译列 dest=翻译保存列  start_count-开始行数  end_count-结束行数 
+### src=待翻译列 dest=翻译保存列  start_count-开始行数  end_count-结束行数
 def baidu_thread_loop(src, dest, start_count, end_count):
     while True:
         time.sleep(0.01)
@@ -125,53 +230,29 @@ def baidu_thread_loop(src, dest, start_count, end_count):
 
 ### 主程序代码
 def user_main():
-
-    ### 各平台翻译接口网址定义
-    #http://translate.google.cn/translate_a/single?client=gtx&dt=t&dj=1&ie=UTF-8&sl=auto&tl=zh_TW&q=calculate
-    google_trans_url = 'http://translate.google.cn/translate_a/single?client=gtx'
-    google_trans_data = 'good'
-    google_trans_data_struct = { 'dt':'t',  'dj':'1', 'ie':'UTF-8', 'sl':'en', 'tl':'zh_CN', 'q':google_trans_data}
-
-    #http://api.microsofttranslator.com/v2/Http.svc/Translate?appId=AFC76A66CF4F434ED080D245C30CF1E71C22959C&from=&to=en&text=考勤计算
-    bing_trans_url = 'http://api.microsofttranslator.com/v2/Http.svc/Translate?'
-
-    #http://fanyi.youdao.com/translate?&doctype=json&type=AUTO&i=计算
-    youdao_trans_url = 'http://fanyi.youdao.com/translate?'
-
-    #http://fanyi.baidu.com/transapi?from=auto&to=cht&query=Calculation
-    baidu_trans_url = 'http://fanyi.baidu.com/transapi?'
-
-    headers = {
-        #'Accept':'text/html,application/xhtml+xml,aplication/xml;q=0.9,*/*;q=0.8',
-        #'Accept-Language':'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
-        #'Connection':'keep-alive',
-        'Host':'translate.google.cn',
-        'Upgrade-Insecure-Requests':'1',
-        'User-Agent':'Mozilla/5.0 (Windows NT 10.0;WOW64;rv:64.0) Gecko/20100101 Firefox/64.0'
-    }
-    ### 结束各平台翻译网址定义
-    
-    data = parse.urlencode(google_trans_data_struct)
-    data = data.encode('utf8')
-    req = request.Request(url=google_trans_url, data=data, headers=headers, method="GET")
-    print(req.data)
-    request.urlopen(req)
     
     #全局数据
+    api_class = ''   #翻译接口   baidu，google，bing，youdao
     wb_max_rows = 0  #最大行 
     wb_max_col = 0   #最大列
     wb_src_filename = '' #待表格翻译文件名
     enCell = None
     zhCell = None
+    API_CLASS = ('BAIDU','YOUDAO','GOOGLE', 'BING')
+
+    baidu_start_pos = 1
 
     information()    #显示提示信息
 
-    
-
-"""
+    while True:
+        api_class = input('选择使用的翻译平台：(baidu、google、youdao、bing) ')
+        api_class = api_class.strip().upper()
+        if api_class in API_CLASS:
+            print('\t翻译平台 '+api_class.lower())
+            break
 
     while True:
-        filename = input("\n\n请输入表格的名称:  ")
+        filename = input("请输入表格的名称:  ")
         if not(os.path.isfile(filename+'.xlsx') and os.path.exists(filename+'.xlsx')):
             continue
         print("\t"+filename+'.xlsx'+"存在")
@@ -179,6 +260,7 @@ def user_main():
         t_len = create_xlsx(filename)  #创建表格文件，并复制该表格
         wb_max_rows = t_len[0]
         wb_max_col = t_len[1]
+        baidu_count = 10000
         if baidu_count<=wb_max_rows:
             baidu_count = wb_max_rows
         break
@@ -217,12 +299,11 @@ def user_main():
         dests = cell.value
         if (srcs is None) or (''==srcs.strip()) or ((dests!=None) and (''!=dests.strip())): 
             row += 1
-            #print('none')
             continue
         while True:
-            result = BaiDuTranslate(baidu_appid, baidu_key, baidu_fronLang, baidu_toLang, srcs)
+            result = translate_data(tdata=(api_class, ('en', 'zh', srcs)))
             print(result)
-            if 'THRANS_ERROR'==result:
+            if {}==result:
                 error_count += 1
                 continue
                 if error_count>10:
@@ -231,11 +312,12 @@ def user_main():
             else:
                 break
         cell.value = ''
-        cell.value += result
-        #print('fanyi ok')
+        cell.value += result[api_class]
         row += 1
+        time.sleep(0.01)
     wb_src.save(wb_src_filename)
-    print("<<< 翻译工作完成 >>>")
+    print("\n\t---<<< 翻译工作完成 >>>---")
+    
     """
         
         
@@ -243,16 +325,9 @@ def user_main():
     
     #baidu_thread = threading.Thread(target=baidu_thread_loop, name="BAIDU_API", args=('baidu',12 ))
     #baidu_thread.start()
-    
-
-
-user_main()
-"""
-### 测试代码
-create_xlsx('tempxxx')
-dd = BaiDuTranslate('20181219000250232', 'H_wPtwXs6KEDPtLra2ol' , 'en', 'zh', 'good good study')
-print(dd)
-### 测试结束
-"""
-
+   """
+while True:
+    user_main()
+    print('\n\n')
+    print('-'*60)
 
